@@ -1,7 +1,5 @@
-import { fileURLToPath } from "url";
-import { parentPort, workerData, Worker } from "worker_threads";
-
-const __filename = fileURLToPath(import.meta.url);
+import workerpool from "workerpool";
+import { pool } from "./pool.js";
 
 function merge(left, right) {
   let arr = [];
@@ -16,7 +14,7 @@ function merge(left, right) {
   return [...arr, ...left, ...right];
 }
 
-async function mergeSort(array) {
+export async function mergeSort(array) {
   const half = array.length / 2;
 
   if (array.length < 2) {
@@ -25,20 +23,14 @@ async function mergeSort(array) {
 
   const left = array.splice(0, half);
 
-  const l = new Worker(__filename, { workerData: { array: left } });
-  const r = new Worker(__filename, { workerData: { array } });
+  const l = pool.exec("mergeSort", [left]);
+  const r = pool.exec("mergeSort", [array]);
 
-  const pSortedL = new Promise((res) =>
-    l.once("message", (result) => res(result))
-  );
-
-  const pSortedR = new Promise((res) =>
-    r.once("message", (result) => res(result))
-  );
-
-  const [sortedL, sortedR] = await Promise.all([pSortedL, pSortedR]);
+  const [sortedL, sortedR] = await Promise.all([l, r]);
 
   return merge(sortedL, sortedR);
 }
 
-mergeSort(workerData.array).then((result) => parentPort.postMessage(result));
+workerpool.worker({
+  mergeSort: mergeSort,
+});
